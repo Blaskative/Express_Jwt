@@ -7,7 +7,7 @@ const { nextTick } = require("process");
 
 app.use(express.json());
 
-app.use(cors());
+app.use(cors({credentials: true, origin: 'http://localhost:3000'}));
 
 const posts = [
   {
@@ -22,13 +22,13 @@ const posts = [
 const users = [
   {
     username: "Kayle",
-    password: "gorditagordita13",
+    password: "prueba13",
     roles: [2001]
   },
   {
     username: "Blaskative",
-    password: "ringoringo13",
-    roles: [5150]
+    password: "prueba13",
+    roles: [5150,2001,1984]
   },
 ];
 let refreshTokens = [];
@@ -39,14 +39,23 @@ app.post("/token", (req, res) => {
   if (refreshToken == null) return res.sendStatus(401);
   if (!refreshToken.includes(refreshToken)) return res.sendStatus(403);
   jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
+    console.log(err);
     if (err) return res.sendStatus(403);
-    const accesToken = generateAccesToken({ name: user.name });
+   
+    const accesToken = generateAccesToken(user);
     res.json({ accesToken: accesToken });
   });
 });
 
 app.get("/posts", authenticateToken, (req, res) => {
   res.json(posts.filter((post) => post.username === req.user.name));
+});
+app.get("/users", authenticateToken, (req, res) => {
+  let usersRemovePassword = users.map((user)=>{
+    let userSlice= {username:user.username,roles:user.roles};
+    return userSlice;
+  })
+  res.json(usersRemovePassword);
 });
 
 app.delete("logout", (req, res) => {
@@ -55,11 +64,9 @@ app.delete("logout", (req, res) => {
 });
 
 app.post("/login", (req, res) => {
-  const username = req.body.username;
-  const password = req.body.password;
+  const { username, password } = req.body;
   const user = { name: username, password:password };
   let roles;
-  
   let isFound = users.some(element => {
     if (element.username == user.name && element.password == user.password){
       roles= element.roles;
@@ -69,18 +76,15 @@ app.post("/login", (req, res) => {
   });
   if(!isFound) return  res.sendStatus(403);
 
-  const accesToken = generateAccesToken(user);
-  const refreshToken = generateRefreshAcessToken(user);
-  console.log(roles);
-  refreshTokens = [...refreshToken];
-  res.json({ accesToken: accesToken, refreshToken: refreshToken, roles:roles });
+  const token = generateAccesToken(user);
+  res.json({  token: `Bearer ${token}`, roles:roles });
+ 
 });
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
   if (token == null) return res.sendStatus(401);
-
   jwt.verify(token, process.env.ACCES_TOKEN_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
     req.user = user;
@@ -89,7 +93,7 @@ function authenticateToken(req, res, next) {
 }
 
 function generateAccesToken(user) {
-  return jwt.sign(user, process.env.ACCES_TOKEN_SECRET, { expiresIn: "1m" });
+  return jwt.sign(user, process.env.ACCES_TOKEN_SECRET, { expiresIn: "3600s" });
 }
 function generateRefreshAcessToken(user){
     return jwt.sign(user, process.env.REFRESH_TOKEN_SECRET);
